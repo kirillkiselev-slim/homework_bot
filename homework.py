@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import logging
 import os
 import sys
@@ -7,8 +8,20 @@ from logging import StreamHandler
 import requests
 import telegram
 from dotenv import load_dotenv
+import schedule
 
-from homework_bot.exceptions import check_each_token, TokenNotPresentError, check_endpoint_availability, EndpointError
+from homework_bot.exceptions import (
+    check_each_token,
+    check_endpoint_availability,
+    EndpointError,
+    TokenNotPresentError,
+    check_keys_in_homework,
+    KeysResponseError,
+    check_received_status,
+    UnexpectedStatusError,
+    compare_statuses,
+    StatusDidNotChangeError
+)
 
 load_dotenv()
 
@@ -26,15 +39,13 @@ formatter = logging.Formatter(
 
 handler.setFormatter(formatter)
 
-
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKE')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
 
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
@@ -48,6 +59,7 @@ def check_tokens():
         check_each_token([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
     except TokenNotPresentError as e:
         logger.critical(e)
+        sys.exit()
 
 
 def send_message(bot, message):
@@ -56,44 +68,62 @@ def send_message(bot, message):
 
 
 def get_api_answer(timestamp):
-    try:
-        params = {'from_date': timestamp}
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params).json()
-        check_endpoint_availability(ENDPOINT, response)
-    except EndpointError as e:
-        logger.error(e)
+    params = {'from_date': timestamp}
+    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    return response
 
 
 def check_response(response):
-    return response[0].get('homeworks')
+    return response.json().get('homeworks')[0]
 
 
 def parse_status(homework):
-    status = homework.get('status')
     homework_name = homework.get('homework_name')
-    verdict = HOMEWORK_VERDICTS[status]
+    verdict = HOMEWORK_VERDICTS[homework.get('status')]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
-
     check_tokens()
 
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    now = datetime.today()
 
-    get_api_answer(timestamp)
+    days_30 = now - timedelta(days=60)
+
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(days_30.timestamp())  # int(time.time())
+
+    scheduled_message = schedule.every(10).seconds.do
+    status_before = None
 
     while True:
+        schedule.run_pending()
+        time.sleep(1)
         try:
+            response = get_api_answer(timestamp)
+            check_endpoint_availability(ENDPOINT, response)
 
-            ...
+            homework = check_response(response)
+            check_keys_in_homework(homework)
 
-        except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            logger.error(message)
-        ...
+            current_status = check_received_status(homework)
+            compare_statuses(status_before, current_status)
+            status_before = current_status
+
+            message = parse_status(homework)
+            scheduled_message(send_message, bot, message)
+
+        except (EndpointError, KeysResponseError,
+                UnexpectedStatusError) as e:
+            schedule.every(10).seconds.do(logger.error, str(e))
+
+            send_message(bot, str(e))
+
+        except StatusDidNotChangeError as e:
+            schedule.every(10).seconds.do(logger.debug, str(e))
+
+            scheduled_message(send_message, bot, str(e))
 
 
 if __name__ == '__main__':
