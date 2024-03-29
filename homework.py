@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 import logging
 import os
 import sys
@@ -10,15 +9,17 @@ import telegram
 from dotenv import load_dotenv
 
 from exceptions import (
-    check_each_token,
-    compare_statuses,
-
     StatusDidNotChangeError,
     EndpointError,
     TokenNotPresentError,
     KeysResponseError,
     UnexpectedNameError,
     UnexpectedStatusError
+)
+
+from helpers import (
+    check_each_token,
+    compare_statuses,
 )
 
 load_dotenv()
@@ -124,22 +125,16 @@ def main():
 
     check_tokens()
 
-    now = datetime.today()
-
-    days_30 = now - timedelta(days=30)
-
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(days_30.timestamp())
+    timestamp = int(time.time())
 
     while True:
         try:
             response = get_api_answer(timestamp)
-
             homework = check_response(response)
-
             message = parse_status(homework)
 
-            current_status = check_response(response).get('status')
+            current_status = homework.get('status')
             compare_statuses(status_before, current_status)
             status_before = current_status
 
