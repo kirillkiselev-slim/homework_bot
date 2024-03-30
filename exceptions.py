@@ -1,4 +1,4 @@
-class TokenNotPresentError(Exception):
+class TokensNotPresentError(Exception):
     pass
 
 

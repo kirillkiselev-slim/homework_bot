@@ -2,22 +2,24 @@ import logging
 import os
 import sys
 import time
+from typing import Dict, List
 from logging import StreamHandler
+from http import HTTPStatus
 
 import requests
 import telegram
 from dotenv import load_dotenv
+from telegram.error import TelegramError
 
 from exceptions import (
     StatusDidNotChangeError,
     EndpointError,
-    TokenNotPresentError,
-    KeysResponseError,
+    TokensNotPresentError,
     UnexpectedNameError,
     UnexpectedStatusError
 )
 
-from helpers import (
+from check_tokens_and_hw_statuses import (
     check_each_token,
     compare_statuses,
 )
@@ -56,8 +58,8 @@ HOMEWORK_VERDICTS = {
 def check_tokens():
     """Проверяет наличие необходимых токенов."""
     try:
-        check_each_token([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
-    except TokenNotPresentError as e:
+        check_each_token((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
+    except TokensNotPresentError as e:
         logger.critical(e)
         sys.exit()
 
@@ -66,27 +68,30 @@ def send_message(bot, message):
     """Отправляет сообщение через бота в чат Telegram."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug('Сообщение отправлено: ' + message)
-    except Exception as e:
-        logger.error(e)
+    except TelegramError as e:
+        logger.exception(e)
+    logger.debug(f'Сообщение отправлено: {message}')
 
 
 def get_api_answer(timestamp):
     """Получает ответ от API на основе временной метки."""
+    params = {'from_date': timestamp}
     try:
-        params = {'from_date': timestamp}
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             raise EndpointError(f'Сбой в работе программы: Эндпоинт'
                                 f' {ENDPOINT} недоступен.'
-                                f' Код ответа API: "{response.status_code}" ')
+                                f' Код ответа API: "{response.status_code}"'
+                                f' Адрес запроса: {response.url},'
+                                f' Параметры запроса: {params}')
 
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(e)
+    except requests.RequestException:
+        pass
+
+    return response.json()
 
 
-def check_response(response):
+def check_response(response: Dict) -> List:
     """Проверяет ответ от API и возвращает выполненное задание."""
     if not isinstance(response, dict):
         raise TypeError('Неверный тип данных от API')
@@ -97,7 +102,7 @@ def check_response(response):
     if not isinstance(homeworks, list):
         raise TypeError('Неверный тип данных')
 
-    return homeworks[0]
+    return homeworks
 
 
 def parse_status(homework):
@@ -130,33 +135,33 @@ def main():
 
     while True:
         try:
-            response = get_api_answer(timestamp)
-            homework = check_response(response)
-            message = parse_status(homework)
+            response_content = get_api_answer(timestamp)
+            homeworks = check_response(response_content)
+            current_status = homeworks[0].get('status')
+            message = parse_status(homeworks[0])
 
-            current_status = homework.get('status')
             compare_statuses(status_before, current_status)
             status_before = current_status
 
+            timestamp = int(time.time())
+
             send_message(bot, message)
-            time.sleep(RETRY_PERIOD)
 
         except StatusDidNotChangeError as e:
             logger.debug(e)
             send_message(bot, str(e))
-            time.sleep(RETRY_PERIOD)
 
-        except (TypeError, KeyError, EndpointError, KeysResponseError,
-                UnexpectedNameError, UnexpectedStatusError) as e:
-            logger.error(e)
+        except IndexError:
+            logger.exception('Вернулся пустой массив с homeworks')
+            send_message(bot, 'Не нашли твою домашку')
+
+        except Exception as e:
+            logger.exception(e)
             if error_message_not_sent:
                 send_message(bot, str(e) + '\U0001F198')
                 error_message_not_sent = False
-            time.sleep(RETRY_PERIOD)
 
-        except Exception as e:
-            logger.error(e)
-            send_message(bot, 'Бот не воспринимает информацию\U0001F974')
+        finally:
             time.sleep(RETRY_PERIOD)
 
 

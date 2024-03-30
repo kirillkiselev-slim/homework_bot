@@ -1,6 +1,7 @@
-from exceptions import StatusDidNotChangeError, TokenNotPresentError
+from typing import Tuple
+from exceptions import StatusDidNotChangeError, TokensNotPresentError
 
-TOKEN_NAMES = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
+TOKEN_NAMES = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
 
 
 def compare_statuses(status_before, status_after):
@@ -10,11 +11,11 @@ def compare_statuses(status_before, status_after):
                                       f'Все еще "{status_after}"\uE108')
 
 
-def check_each_token(tokens: list):
+def check_each_token(tokens: Tuple[str]):
     """Проверяет наличие каждого токена."""
     for token, token_name in zip(tokens, TOKEN_NAMES):
         if token is None:
-            raise TokenNotPresentError(f'Отсутствует обязательная '
+            raise TokensNotPresentError(f'Отсутствует обязательная '
                                        f'переменная окружения: "{token_name}".'
                                        f'Программа принудительно'
                                        f' остановлена')
