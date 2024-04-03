@@ -34,9 +34,7 @@ handler = StreamHandler(stream=sys.stdout)
 
 logger.addHandler(handler)
 
-formatter = logging.Formatter(
-    '%(asctime)s [%(levelname)s] %(message)s'
-)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 
 handler.setFormatter(formatter)
 
@@ -59,8 +57,8 @@ def check_tokens():
     """Проверяет наличие необходимых токенов."""
     try:
         check_each_token((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-    except TokensNotPresentError as error:
-        logger.critical(error)
+    except TokensNotPresentError as err:
+        logger.critical(err)
         sys.exit()
 
 
@@ -69,9 +67,9 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug(f'Сообщение отправлено: {message}')
-    except TelegramError as error:
+    except TelegramError as err:
         raise TelegramConnectionError('Ошибка подключения к'
-                                      ' Телеграм') from error
+                                      ' Телеграм') from err
 
 
 def get_api_answer(timestamp):
@@ -79,9 +77,8 @@ def get_api_answer(timestamp):
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-    except requests.RequestException as error:
-        raise EndpointConnectionError(f'Ошибка при отправке'
-                                      f' запроса') from error
+    except requests.RequestException as err:
+        raise EndpointConnectionError(f'Ошибка при отправке запроса') from err
 
     if response.status_code != HTTPStatus.OK:
         raise EndpointError(f'Сбой в работе программы: Эндпоинт'
@@ -150,10 +147,10 @@ def main():
                 send_message(bot, message)
                 hw_before = parsed_hw_after
 
-        except Exception as error:
-            logger.exception(error)
+        except Exception as err:
+            logger.exception(err)
             if error_message_not_sent:
-                send_message(bot, str(error) + '\U0001F198')
+                send_message(bot, str(err) + '\U0001F198')
                 error_message_not_sent = False
 
         finally:
