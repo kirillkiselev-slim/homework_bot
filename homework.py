@@ -13,15 +13,15 @@ from telegram.error import TelegramError
 
 from exceptions import (
     StatusDidNotChangeError,
+    EndpointConnectionError,
     EndpointError,
     TokensNotPresentError,
     UnexpectedNameError,
     UnexpectedStatusError
 )
 
-from check_tokens_and_hw_statuses import (
-    check_each_token,
-    compare_statuses,
+from check_tokens import (
+    check_each_token
 )
 
 load_dotenv()
@@ -59,17 +59,15 @@ def check_tokens():
     """Проверяет наличие необходимых токенов."""
     try:
         check_each_token((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-    except TokensNotPresentError as e:
-        logger.critical(e)
+    except TokensNotPresentError as error:
+        logger.critical(error)
         sys.exit()
 
 
 def send_message(bot, message):
     """Отправляет сообщение через бота в чат Telegram."""
-    try:
-        bot.send_message(TELEGRAM_CHAT_ID, message)
-    except TelegramError as e:
-        logger.exception(e)
+    # try:
+    bot.send_message(TELEGRAM_CHAT_ID, message)
     logger.debug(f'Сообщение отправлено: {message}')
 
 
@@ -78,15 +76,16 @@ def get_api_answer(timestamp):
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != HTTPStatus.OK:
-            raise EndpointError(f'Сбой в работе программы: Эндпоинт'
-                                f' {ENDPOINT} недоступен.'
-                                f' Код ответа API: "{response.status_code}"'
-                                f' Адрес запроса: {response.url},'
-                                f' Параметры запроса: {params}')
+    except requests.RequestException as error:
+        raise EndpointConnectionError(f'Ошибка при отправке запроса:'
+                                      f' {str(error)}')
 
-    except requests.RequestException:
-        pass
+    if response.status_code != HTTPStatus.OK:
+        raise EndpointError(f'Сбой в работе программы: Эндпоинт'
+                            f' {ENDPOINT} недоступен.'
+                            f' Код ответа API: "{response.status_code}"'
+                            f' Адрес запроса: {response.url},'
+                            f' Параметры запроса: {params}')
 
     return response.json()
 
@@ -126,7 +125,7 @@ def parse_status(homework):
 def main():
     """Основная логика работы бота."""
     error_message_not_sent = True
-    status_before = None
+    hw_before = None
 
     check_tokens()
 
@@ -137,28 +136,25 @@ def main():
         try:
             response_content = get_api_answer(timestamp)
             homeworks = check_response(response_content)
-            current_status = homeworks[0].get('status')
-            message = parse_status(homeworks[0])
-
-            compare_statuses(status_before, current_status)
-            status_before = current_status
-
+            parsed_hw_after = [parse_status(hw) for hw in homeworks]
             timestamp = int(time.time())
 
-            send_message(bot, message)
+            if parsed_hw_after == hw_before:
+                raise StatusDidNotChangeError
 
-        except StatusDidNotChangeError as e:
-            logger.debug(e)
-            send_message(bot, str(e))
+            [send_message(bot, message) for message in parsed_hw_after]
+            hw_before = parsed_hw_after
 
-        except IndexError:
-            logger.exception('Вернулся пустой массив с homeworks')
-            send_message(bot, 'Не нашли твою домашку')
+        except StatusDidNotChangeError:
+            logger.debug('Статус заданий/задания не поменялся')
 
-        except Exception as e:
-            logger.exception(e)
+        except TelegramError as error:
+            logger.exception(error)
+
+        except Exception as error:
+            logger.exception(error)
             if error_message_not_sent:
-                send_message(bot, str(e) + '\U0001F198')
+                send_message(bot, str(error) + '\U0001F198')
                 error_message_not_sent = False
 
         finally:

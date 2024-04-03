@@ -2,6 +2,10 @@ class TokensNotPresentError(Exception):
     pass
 
 
+class EndpointConnectionError(Exception):
+    pass
+
+
 class EndpointError(Exception):
     pass
 
