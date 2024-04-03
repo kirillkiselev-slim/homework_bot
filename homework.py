@@ -1,8 +1,8 @@
 import logging
+from typing import Mapping, List
 import os
 import sys
 import time
-from typing import Dict, List
 from logging import StreamHandler
 from http import HTTPStatus
 
@@ -16,6 +16,7 @@ from exceptions import (
     EndpointConnectionError,
     EndpointError,
     TokensNotPresentError,
+    TelegramConnectionError,
     UnexpectedNameError,
     UnexpectedStatusError
 )
@@ -43,8 +44,8 @@ handler.setFormatter(formatter)
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
-RETRY_PERIOD = 600
+DURATION_IN_SECONDS = 600
+RETRY_PERIOD = DURATION_IN_SECONDS
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -66,8 +67,12 @@ def check_tokens():
 
 def send_message(bot, message):
     """Отправляет сообщение через бота в чат Telegram."""
-    bot.send_message(TELEGRAM_CHAT_ID, message)
-    logger.debug(f'Сообщение отправлено: {message}')
+    try:
+        bot.send_message(TELEGRAM_CHAT_ID, message)
+        logger.debug(f'Сообщение отправлено: {message}')
+    except TelegramError as error:
+        raise TelegramConnectionError('Ошибка подключения к'
+                                      ' Телеграму') from error
 
 
 def get_api_answer(timestamp):
@@ -76,8 +81,8 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     except requests.RequestException as error:
-        raise EndpointConnectionError(f'Ошибка при отправке запроса:'
-                                      f' {str(error)}')
+        raise EndpointConnectionError(f'Ошибка при отправке'
+                                      f' запроса') from error
 
     if response.status_code != HTTPStatus.OK:
         raise EndpointError(f'Сбой в работе программы: Эндпоинт'
@@ -89,7 +94,7 @@ def get_api_answer(timestamp):
     return response.json()
 
 
-def check_response(response: Dict) -> List:
+def check_response(response: Mapping) -> List:
     """Проверяет ответ от API и возвращает выполненное задание."""
     if not isinstance(response, dict):
         raise TypeError('Неверный тип данных от API')
@@ -139,16 +144,12 @@ def main():
             timestamp = int(time.time())
 
             if parsed_hw_after == hw_before:
+                logger.debug('Статус заданий/задания не поменялся')
                 raise StatusDidNotChangeError
 
-            [send_message(bot, message) for message in parsed_hw_after]
-            hw_before = parsed_hw_after
-
-        except StatusDidNotChangeError:
-            logger.debug('Статус заданий/задания не поменялся')
-
-        except TelegramError as error:
-            logger.exception(error)
+            for message in parsed_hw_after:
+                send_message(bot, message)
+                hw_before = parsed_hw_after
 
         except Exception as error:
             logger.exception(error)

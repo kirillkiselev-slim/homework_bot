@@ -6,6 +6,10 @@ class EndpointConnectionError(Exception):
     pass
 
 
+class TelegramConnectionError(Exception):
+    pass
+
+
 class EndpointError(Exception):
     pass
 
