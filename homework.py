@@ -78,7 +78,7 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     except requests.RequestException as err:
-        raise EndpointConnectionError(f'Ошибка при отправке запроса') from err
+        raise EndpointConnectionError('Ошибка при отправке запроса') from err
 
     if response.status_code != HTTPStatus.OK:
         raise EndpointError(f'Сбой в работе программы: Эндпоинт'
