@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from telegram.error import TelegramError
 
 from exceptions import (
-    StatusDidNotChangeError,
     EndpointConnectionError,
     EndpointError,
     TokensNotPresentError,
@@ -72,7 +71,7 @@ def send_message(bot, message):
         logger.debug(f'Сообщение отправлено: {message}')
     except TelegramError as error:
         raise TelegramConnectionError('Ошибка подключения к'
-                                      ' Телеграму') from error
+                                      ' Телеграм') from error
 
 
 def get_api_answer(timestamp):
@@ -134,6 +133,7 @@ def main():
     check_tokens()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+
     timestamp = int(time.time())
 
     while True:
@@ -142,10 +142,9 @@ def main():
             homeworks = check_response(response_content)
             parsed_hw_after = [parse_status(hw) for hw in homeworks]
             timestamp = int(time.time())
-
             if parsed_hw_after == hw_before:
                 logger.debug('Статус заданий/задания не поменялся')
-                raise StatusDidNotChangeError
+                continue
 
             for message in parsed_hw_after:
                 send_message(bot, message)

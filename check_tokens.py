@@ -1,5 +1,5 @@
 from typing import Tuple
-from exceptions import StatusDidNotChangeError, TokensNotPresentError
+from exceptions import TokensNotPresentError
 
 TOKEN_NAMES = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
 

@@ -24,7 +24,3 @@ class UnexpectedStatusError(Exception):
 
 class UnexpectedNameError(Exception):
     pass
-
-
-class StatusDidNotChangeError(Exception):
-    pass
