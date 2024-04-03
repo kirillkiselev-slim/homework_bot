@@ -66,7 +66,6 @@ def check_tokens():
 
 def send_message(bot, message):
     """Отправляет сообщение через бота в чат Telegram."""
-    # try:
     bot.send_message(TELEGRAM_CHAT_ID, message)
     logger.debug(f'Сообщение отправлено: {message}')
 
