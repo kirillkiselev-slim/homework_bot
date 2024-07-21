@@ -150,6 +150,10 @@ static/
 posts/static/
 media/
 
-/.env
+/.env\
+
+Procfile
+.dockerignore
+
 
 
